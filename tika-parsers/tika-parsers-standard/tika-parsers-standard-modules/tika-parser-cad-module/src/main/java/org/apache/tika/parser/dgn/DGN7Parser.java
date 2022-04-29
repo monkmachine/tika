@@ -81,7 +81,7 @@ public class DGN7Parser extends AbstractParser {
 	}
 
 	private void next(TikaInputStream tstream) throws Exception {
-
+		
 			// 6 bits level, 1 bit reserved, 1 bit complex
 			int h1 = tstream.read();
 			// 7 bits type, 1 bit deleted
@@ -91,6 +91,7 @@ public class DGN7Parser extends AbstractParser {
 			if (h2 < -1 || (h1 == 0xff && h2 == 0xff))
 				keeprunning = false;
 			int words = EndianUtils.readUShortLE(tstream);
+			System.out.println(words);
 			int size = 4 + words * 2;
 			// What range does this element cover?
 			// TODO Swap to readIntME on Git Head
@@ -115,8 +116,12 @@ public class DGN7Parser extends AbstractParser {
 				byte[] str = IOUtils.readFully(tstream, len);
 				DGNContent.add(new String(str, StandardCharsets.US_ASCII));
 			} else {
+				//System.out.println(tstream.available());
 				int skip = (words - 16) * 2;
-				IOUtils.skipFully(tstream, skip);
+				//IOUtils.skipFully(tstream, skip);
+				tstream.skip(skip);
+				
+				
 			}
 		
 		keeprunning = true;

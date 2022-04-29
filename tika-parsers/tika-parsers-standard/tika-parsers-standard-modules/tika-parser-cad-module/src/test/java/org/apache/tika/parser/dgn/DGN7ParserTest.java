@@ -34,8 +34,9 @@ public class DGN7ParserTest extends TikaTest {
 
 	@Test
     public void testBasics() throws Exception {
+		
     	InputStream input =
-    			DGN7ParserTest.class.getResourceAsStream("/test-documents/testDGN7.dgn");
+    			DGN7ParserTest.class.getResourceAsStream("/test-documents/1344468370.dgn");
         Metadata metadata = new Metadata();
         metadata.set(Metadata.CONTENT_TYPE, "vnd.dgn; version=7");
         ContentHandler handler = new BodyContentHandler();
