@@ -80,17 +80,19 @@ public class DGN7Parser extends AbstractParser {
 				
 			}
 		}
+
 		XHTMLContentHandler xhtml = new XHTMLContentHandler(handler, metadata);
 		xhtml.startDocument();
 		metadata.add("ElemetTypes", DGNElementTypes.toString());
-		
+		String content = null;
         xhtml.startDocument();
         for (Iterator<String> iter = DGNContent.iterator(); iter.hasNext(); ) {
         	
-        	String content = iter.next();
-        	xhtml.element("p", content);
+        	content = content + "\n"+iter.next();
+        	
         }
-	
+        
+        xhtml.element("p", content);
         System.out.println(DGNElementTypes);
 		// System.out.println(DGNContent);
 
@@ -146,8 +148,8 @@ public class DGN7Parser extends AbstractParser {
 			IOUtils.skipFully(tstream, 24);
 			// Grab the text
 			int len = (words - 28) * 2;
-			byte[] str = IOUtils.readFully(tstream, len);
-			DGNContent.add(new String(str, StandardCharsets.ISO_8859_1));
+			String str =new String( IOUtils.readFully(tstream, len), StandardCharsets.ISO_8859_1);
+			DGNContent.add(str.replaceAll("[^\\x20-\\x7E]", ""));
 			
 			
 		} else {
