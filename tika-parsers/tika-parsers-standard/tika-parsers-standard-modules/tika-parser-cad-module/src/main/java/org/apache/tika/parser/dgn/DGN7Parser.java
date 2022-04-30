@@ -21,20 +21,23 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.tika.io.EndianUtils;
 import org.apache.commons.io.IOUtils;
 import org.xml.sax.ContentHandler;
 import org.xml.sax.SAXException;
+
+
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.io.TikaInputStream;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.mime.MediaType;
 import org.apache.tika.parser.AbstractParser;
 import org.apache.tika.parser.ParseContext;
-import org.apache.tika.parser.microsoft.SummaryExtractor;
 import org.apache.tika.sax.XHTMLContentHandler;
 
 /**
@@ -42,12 +45,12 @@ import org.apache.tika.sax.XHTMLContentHandler;
  */
 public class DGN7Parser extends AbstractParser {
 	private static final long serialVersionUID = 7279402818737419485L;
-	TikaInputStream tstream;
-	Metadata DGNMeta ;
-	boolean keeprunning = true;
-	
-	List<String> DGNContent =new ArrayList<String>();;
-	
+	private TikaInputStream tstream;
+	Metadata DGNMeta;
+	private Set<Integer> DGNElementTypes = new TreeSet<>();
+	private List<String> DGNContent = new ArrayList<String>();;
+	private boolean keeprunning = true;
+
 	Set<MediaType> SUPPORTED_TYPES = Collections.singleton(MediaType.image("vnd.dgn; version=7"));
 
 	@Override
@@ -58,72 +61,101 @@ public class DGN7Parser extends AbstractParser {
 	@Override
 	public void parse(InputStream stream, ContentHandler handler, Metadata metadata, ParseContext context)
 			throws IOException, SAXException, TikaException {
-		XHTMLContentHandler xhtml = new XHTMLContentHandler(handler, metadata);
-		xhtml.startDocument();
+
 
 		tstream = TikaInputStream.get(stream);
 		try {
 			CheckHeaderSig(tstream);
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+
+			throw new TikaException("DGN Parser Exception: " + e.getMessage());
+
 		}
-		while(keeprunning) {
+		while (keeprunning) {
 			try {
-				next(tstream);
+				extractContent(tstream);
 			} catch (Exception e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				keeprunning = false;
+				throw new TikaException("DGN Parser Exception: " + e.getMessage());
+				
 			}
 		}
+		XHTMLContentHandler xhtml = new XHTMLContentHandler(handler, metadata);
+		xhtml.startDocument();
+		metadata.add("ElemetTypes", DGNElementTypes.toString());
+		
+        xhtml.startDocument();
+        for (Iterator<String> iter = DGNContent.iterator(); iter.hasNext(); ) {
+        	
+        	String content = iter.next();
+        	xhtml.element("p", content);
+        }
+	
+        System.out.println(DGNElementTypes);
+		// System.out.println(DGNContent);
 
-		xhtml.endDocument();
+        xhtml.endDocument();
 	}
 
-	private void next(TikaInputStream tstream) throws Exception {
-		
-			// 6 bits level, 1 bit reserved, 1 bit complex
-			int h1 = tstream.read();
-			// 7 bits type, 1 bit deleted
-			int h2 = tstream.read();
-			int type = h2 & 0x7f;
-			// End?
-			if (h2 < -1 || (h1 == 0xff && h2 == 0xff))
-				keeprunning = false;
-			int words = EndianUtils.readUShortLE(tstream);
-			System.out.println(words);
-			int size = 4 + words * 2;
-			// What range does this element cover?
-			// TODO Swap to readIntME on Git Head
-			long xlow = EndianUtils.readUIntLE(tstream);
-			long ylow = EndianUtils.readUIntLE(tstream);
-			long zlow = EndianUtils.readUIntLE(tstream);
-			long xhigh = EndianUtils.readUIntLE(tstream);
-			long yhigh = EndianUtils.readUIntLE(tstream);
-			long zhigh = EndianUtils.readUIntLE(tstream);
+	private void extractContent(TikaInputStream tstream) throws Exception {
 
-			// Rest of element general properties
-			int graphicGroup = EndianUtils.readUShortLE(tstream);
-			int skipToAttr = EndianUtils.readUShortLE(tstream);
-			int properties = EndianUtils.readUShortLE(tstream);
-			int symbology = EndianUtils.readUShortLE(tstream);
+		// 6 bits level, 1 bit reserved, 1 bit complex
+		int h1 = tstream.read();
+		// 7 bits type, 1 bit deleted
+		int h2 = tstream.read();
+		int type = h2 & 0x7f;
+		// End?
+		if (h2 < -1 || (h1 == 0xff && h2 == 0xff)) {
+			keeprunning = false;
+			return;
+		}
+		int words = EndianUtils.readUShortLE(tstream);
+		// These may be useful in future if some of the other attributes of a DGN we
+		// want to pull out, leaving as unused for the moment
+		@SuppressWarnings("unused")
+		int size = 4 + words * 2;
+		// What range does this element cover?
 
-			if (type == 17) {
-				// Skip symbology, fonts etc
-				IOUtils.skipFully(tstream, 24);
-				// Grab the text
-				int len = (words - 28) * 2;
-				byte[] str = IOUtils.readFully(tstream, len);
-				DGNContent.add(new String(str, StandardCharsets.US_ASCII));
-			} else {
-				//System.out.println(tstream.available());
-				int skip = (words - 16) * 2;
-				//IOUtils.skipFully(tstream, skip);
-				tstream.skip(skip);
-				
-				
-			}
-		
+		// TODO Swap to readIntME on Git Head
+		@SuppressWarnings("unused")
+		long xlow = EndianUtils.readUIntLE(tstream);
+		@SuppressWarnings("unused")
+		long ylow = EndianUtils.readUIntLE(tstream);
+		@SuppressWarnings("unused")
+		long zlow = EndianUtils.readUIntLE(tstream);
+		@SuppressWarnings("unused")
+		long xhigh = EndianUtils.readUIntLE(tstream);
+		@SuppressWarnings("unused")
+		long yhigh = EndianUtils.readUIntLE(tstream);
+		@SuppressWarnings("unused")
+		long zhigh = EndianUtils.readUIntLE(tstream);
+
+		// Rest of element general properties
+		@SuppressWarnings("unused")
+		int graphicGroup = EndianUtils.readUShortLE(tstream);
+		@SuppressWarnings("unused")
+		int skipToAttr = EndianUtils.readUShortLE(tstream);
+		@SuppressWarnings("unused")
+		int properties = EndianUtils.readUShortLE(tstream);
+		@SuppressWarnings("unused")
+		int symbology = EndianUtils.readUShortLE(tstream);
+
+		DGNElementTypes.add(type);
+		if (type == 17) {
+			// Skip symbology, fonts etc
+			IOUtils.skipFully(tstream, 24);
+			// Grab the text
+			int len = (words - 28) * 2;
+			byte[] str = IOUtils.readFully(tstream, len);
+			DGNContent.add(new String(str, StandardCharsets.ISO_8859_1));
+			
+			
+		} else {
+			int skip = (words - 16) * 2;
+			tstream.skip(skip);
+
+		}
+
 		keeprunning = true;
 
 	}
@@ -137,7 +169,8 @@ public class DGN7Parser extends AbstractParser {
 		if (sig == 0x0809fe02 || sig == 0xc809fe02) {
 			// Good
 		} else {
-			throw new IOException("Bad file signature " + sig + " = " + Integer.toHexString(sig));
+			throw new TikaException("Bad file signature " + sig + " = " + Integer.toHexString(sig));
+
 		}
 		tstream.reset();
 	}
