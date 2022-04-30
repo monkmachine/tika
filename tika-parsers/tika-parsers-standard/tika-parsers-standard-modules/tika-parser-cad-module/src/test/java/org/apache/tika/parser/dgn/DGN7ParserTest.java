@@ -57,7 +57,7 @@ public class DGN7ParserTest extends TikaTest {
         Metadata metadata = new Metadata();
         metadata.set(Metadata.CONTENT_TYPE, "vnd.dgn; version=7");
 
-        ContentHandler handler = new BodyContentHandler(-1);
+        ContentHandler handler = new BodyContentHandler();
         ParseContext context = new ParseContext();
         new DGN7Parser().parse(input, handler, metadata, context);
         String content = handler.toString();

@@ -18,6 +18,7 @@ package org.apache.tika.parser.dgn;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -104,8 +105,10 @@ public class DGN7Parser extends AbstractParser {
 		// 6 bits level, 1 bit reserved, 1 bit complex
 		int h1 = tstream.read();
 		// 7 bits type, 1 bit deleted
-		int h2 = tstream.read();
+		int h2 = tstream.read() ;
 		int type = h2 & 0x7f;
+
+		boolean isdeleted = BigInteger.valueOf(h2).testBit(7);
 		// End?
 		if (h2 < -1 || (h1 == 0xff && h2 == 0xff)) {
 			keeprunning = false;
@@ -145,12 +148,14 @@ public class DGN7Parser extends AbstractParser {
 		DGNElementTypes.add(type);
 		if (type == 17) {
 			// Skip symbology, fonts etc
+
 			IOUtils.skipFully(tstream, 24);
 			// Grab the text
 			int len = (words - 28) * 2;
 			String str =new String( IOUtils.readFully(tstream, len), StandardCharsets.ISO_8859_1);
+			if(!isdeleted) {
 			DGNContent.add(str.replaceAll("[^\\x20-\\x7E]", ""));
-			
+			}
 			
 		} else {
 			int skip = (words - 16) * 2;
