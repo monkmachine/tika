@@ -49,6 +49,7 @@ public class DGN7Parser extends AbstractParser {
 	private TikaInputStream tstream;
 	Metadata DGNMeta;
 	private Set<Integer> DGNElementTypes = new TreeSet<>();
+	private int DGNElementCount =0;
 	private List<String> DGNContent = new ArrayList<String>();;
 	private boolean keeprunning = true;
 
@@ -85,6 +86,7 @@ public class DGN7Parser extends AbstractParser {
 		XHTMLContentHandler xhtml = new XHTMLContentHandler(handler, metadata);
 		xhtml.startDocument();
 		metadata.add("ElemetTypes", DGNElementTypes.toString());
+		metadata.add("ElemetCount", String.valueOf(DGNElementCount));
 		String content = null;
         xhtml.startDocument();
         for (Iterator<String> iter = DGNContent.iterator(); iter.hasNext(); ) {
@@ -107,12 +109,14 @@ public class DGN7Parser extends AbstractParser {
 		// 7 bits type, 1 bit deleted
 		int h2 = tstream.read() ;
 		int type = h2 & 0x7f;
-
-		boolean isdeleted = BigInteger.valueOf(h2).testBit(7);
 		// End?
 		if (h2 < -1 || (h1 == 0xff && h2 == 0xff)) {
 			keeprunning = false;
 			return;
+		}
+		boolean isdeleted = BigInteger.valueOf(h2).testBit(7);
+		if(!isdeleted) {
+			DGNElementCount = DGNElementCount +1;
 		}
 		int words = EndianUtils.readUShortLE(tstream);
 		// These may be useful in future if some of the other attributes of a DGN we

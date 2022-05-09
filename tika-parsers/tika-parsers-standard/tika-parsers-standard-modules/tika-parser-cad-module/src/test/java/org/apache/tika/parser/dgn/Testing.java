@@ -68,6 +68,11 @@ public class Testing {
    public static void main(String[] args) throws Exception {
 
       Testing r = new Testing(DGN7ParserTest.class.getResourceAsStream("/test-documents/1344468370.dgn"));
+      try {
       while(r.next()) {}
+      }
+      catch (Exception e){
+    	  e.printStackTrace();
+      }
    }
 }
