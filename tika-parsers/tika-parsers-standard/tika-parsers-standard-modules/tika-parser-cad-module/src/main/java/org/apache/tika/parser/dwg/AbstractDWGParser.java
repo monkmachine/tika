@@ -34,8 +34,7 @@ public abstract class AbstractDWGParser extends AbstractParser {
 	private final DWGParserConfig defaultDwgParserConfig = new DWGParserConfig();
 
     public void configure(ParseContext parseContext) {
-    	DWGParserConfig dwgParserConfig =
-                parseContext.get(DWGParserConfig.class, defaultDwgParserConfig);
+    	DWGParserConfig dwgParserConfig =  parseContext.get(DWGParserConfig.class, defaultDwgParserConfig);
         parseContext.set(DWGParserConfig.class, dwgParserConfig);
     }
 

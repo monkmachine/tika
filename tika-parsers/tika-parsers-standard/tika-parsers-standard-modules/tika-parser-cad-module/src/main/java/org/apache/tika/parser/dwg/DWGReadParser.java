@@ -11,6 +11,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.commons.io.FileUtils;
@@ -19,13 +21,18 @@ import org.apache.tika.metadata.Metadata;
 import org.apache.tika.mime.MediaType;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.sax.XHTMLContentHandler;
+
 import org.xml.sax.ContentHandler;
 import org.xml.sax.SAXException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.core.json.JsonReadFeature;
+
 
 public class DWGReadParser extends AbstractDWGParser {
-	private static final Logger LOG = LoggerFactory.getLogger(DWGParser.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DWGParser.class);
     /**
      * 
      */
@@ -81,43 +88,42 @@ public class DWGReadParser extends AbstractDWGParser {
                 }
 
             }
-    		ObjectMapper mapper = new ObjectMapper();
-    		JsonNode actualObj = mapper.readTree(tmpFileOut);
-    		JsonNode array = actualObj.get("OBJECTS");
-			JsonNode textNode;
-			String nodeval;
-			if (array.isArray()) {
-				for (final JsonNode objNode : array) {
-					JsonNode objectNode = objNode.get("object");
-					JsonNode entityNode = objNode.get("entity");
-					if (objectNode != null || entityNode != null) {
-						if (objectNode != null) {
-							nodeval = objectNode.textValue();
-						} else {
-							nodeval = entityNode.textValue();
-						}
+            JsonFactory jfactory = JsonFactory.builder().enable(JsonReadFeature.ALLOW_MISSING_VALUES,JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS,JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER).build();
+            JsonParser jParser = jfactory.createParser(tmpFileOut);
+            JsonToken nextToken = jParser.nextToken();
+            StringBuilder sb = new StringBuilder();
+            while ((nextToken = jParser.nextToken()) != JsonToken.END_OBJECT) {
+                if (nextToken == JsonToken.FIELD_NAME) {
+                    String nextFieldName = jParser.currentName();
+                    nextToken = jParser.nextToken();
+                    if (nextToken.isStructStart()) {
 
-						switch (nodeval) {
-						case "TEXT":
-						case "ATTRIB":
-							 textNode = objNode.get("text_value");					 
-							 if (textNode != null) 
-								 xhtml.characters(removeStringFormatting(textNode.asText()));
-							break;
-						case "MTEXT":
-						case "BLOCK":
-							 textNode = objNode.get("text");
-							 if (textNode != null) 
+                        if ("OBJECTS".equals(nextFieldName)) {
+                            // Start array
+                            jParser.nextToken();
+                            while (jParser.nextToken() != JsonToken.END_ARRAY) {
+                                parseDwgObject(jParser, (nextTextValue) -> {
 
-								 xhtml.characters(removeStringFormatting(textNode.asText()));
+                                    try {
+										xhtml.characters(removeStringFormatting(nextTextValue));
+										xhtml.newline();
+									} catch (SAXException e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+                                });
+                            }
+                        } else if ("SummaryInfo".equals(nextFieldName)) {
 
-							break;
-						default:
-							break;
-						}
-					}
-				}
-			}
+                        } else if ("FILEHEADER".equals(nextFieldName)) {
+                            parseHeader(jParser);
+                        } else {
+                            jParser.skipChildren();
+                        }
+                    }
+                }
+            }
+            jParser.close();
         } finally {
             FileUtils.deleteQuietly(tmpFileOut);
             FileUtils.deleteQuietly(tmpFileIn);
@@ -126,28 +132,69 @@ public class DWGReadParser extends AbstractDWGParser {
         
         xhtml.endDocument();
     }
-    
+    private void parseDwgObject(JsonParser jsonParser, Consumer<String> textConsumer) throws IOException {
+        JsonToken nextToken;
+        while ((nextToken = jsonParser.nextToken()) != JsonToken.END_OBJECT) {
+            if (nextToken == JsonToken.FIELD_NAME) {
+                String nextFieldName = jsonParser.currentName();
+                nextToken = jsonParser.nextToken();
+                if (nextToken.isStructStart()) {
+                    jsonParser.skipChildren();
+                } else if (nextToken.isScalarValue()) {
+                    if ("text".equals(nextFieldName)) {
+                        String textVal = jsonParser.getText();
+                        if (StringUtils.isNotBlank(textVal)) {
+
+                            textConsumer.accept(textVal);
+                        }
+                    }
+                    else    if ("text_value".equals(nextFieldName)) {
+                        String textVal = jsonParser.getText();
+                        if (StringUtils.isNotBlank(textVal)) {
+
+                            textConsumer.accept(textVal);
+                            
+                        }
+                    }
+                }
+            }
+        }
+    }
+    private void parseHeader(JsonParser jsonParser) throws IOException {
+        JsonToken nextToken;
+        while ((nextToken = jsonParser.nextToken()) != JsonToken.END_OBJECT) {
+            if (nextToken == JsonToken.FIELD_NAME) {
+                String nextFieldName = jsonParser.currentName();
+                nextToken = jsonParser.nextToken();
+                if (nextToken.isStructStart()) {
+                    jsonParser.skipChildren();
+                } else if (nextToken.isScalarValue()) {
+                   
+                }
+            }
+        }
+    }
     private String removeStringFormatting(String dwgString) {
-		String cleanString;
-		//remove \\p and replace with new line
-		cleanString = dwgString.replaceAll("\\\\P", "\n");
-		//replace lines with \L/l
-		cleanString = cleanString.replaceAll("\\\\H[0-9]*\\.[0-9]*x;\\\\[lL]", "");
-		//replace lines without \L.l
-		cleanString = cleanString.replaceAll("\\\\H[0-9]*\\.[0-9]*x;", "");
-		//replace Starting formating
-		cleanString = cleanString.replaceAll("\\{\\\\L", "");
-		//replace }
-		cleanString = cleanString.replaceAll("\\}", "");
-		//replace pi
-		cleanString = cleanString.replaceAll("\\\\pi-[0-9].*;", "");
-		//replace \A1;
-		cleanString = cleanString.replaceAll("\\\\A1;", "");
-		
-		
-		//
-		return cleanString;
-		
-	}
+        String cleanString;
+        //remove \\p and replace with new line
+        cleanString = dwgString.replaceAll("\\\\P", "\n");
+        //replace lines with \L/l
+        cleanString = cleanString.replaceAll("\\\\H[0-9]*\\.[0-9]*x;\\\\[lL]", "");
+        //replace lines without \L.l
+        cleanString = cleanString.replaceAll("\\\\H[0-9]*\\.[0-9]*x;", "");
+        //replace Starting formating
+        cleanString = cleanString.replaceAll("\\{\\\\L", "");
+        //replace }
+        cleanString = cleanString.replaceAll("\\}", "");
+        //replace pi
+        cleanString = cleanString.replaceAll("\\\\pi-[0-9].*;", "");
+        //replace \A1;
+        cleanString = cleanString.replaceAll("\\\\A1;", "");
+        
+        
+        //
+        return cleanString;
+        
+    }
 
 }

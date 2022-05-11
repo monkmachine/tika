@@ -201,8 +201,9 @@ public class DWGParserTest extends TikaTest {
         ParseContext pc = new ParseContext();
         DWGParserConfig dwgParserConfig = new DWGParserConfig();
         dwgParserConfig.setDwgReadExecutable("G:\\libredwg-0.12.5-win64\\dwgread.exe");
+        dwgParserConfig.setCleanDwgReadRegexToReplace("^\\x20-\\x7e| nan");
         pc.set(DWGParserConfig.class, dwgParserConfig);
-        String xml = getXML("testDWG2010.dwg", pc).xml;
+        String xml = getXML("architectural_-_annotation_scaling_and_multileaders.dwg", pc).xml;
         System.out.println(xml);
     }
 }
