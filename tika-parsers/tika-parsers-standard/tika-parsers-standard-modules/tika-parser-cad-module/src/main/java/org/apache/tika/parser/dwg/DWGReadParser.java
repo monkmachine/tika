@@ -71,7 +71,7 @@ public class DWGReadParser extends AbstractDWGParser {
             }
 
             if (dwgc.isCleanDwgReadOutput()) {
-                // dwgread sometimes creates strings with invalid utf-8 sequences. replace them
+                // dwgread sometimes creates strings with invalid utf-8 sequences or invalid json (nan instead of NaN). replace them
                 // with empty string.
 
                 try (FileInputStream fis = new FileInputStream(tmpFileOut); FileOutputStream fos = new FileOutputStream(tmpFileOutCleaned)) {
@@ -88,10 +88,11 @@ public class DWGReadParser extends AbstractDWGParser {
                 }
 
             }
+            
+            // we can't guarantee the json output is correct so we try to ignore as many errors as we can
             JsonFactory jfactory = JsonFactory.builder().enable(JsonReadFeature.ALLOW_MISSING_VALUES,JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS,JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER).build();
             JsonParser jParser = jfactory.createParser(tmpFileOut);
             JsonToken nextToken = jParser.nextToken();
-            StringBuilder sb = new StringBuilder();
             while ((nextToken = jParser.nextToken()) != JsonToken.END_OBJECT) {
                 if (nextToken == JsonToken.FIELD_NAME) {
                     String nextFieldName = jParser.currentName();
@@ -105,18 +106,15 @@ public class DWGReadParser extends AbstractDWGParser {
                                 parseDwgObject(jParser, (nextTextValue) -> {
 
                                     try {
-										xhtml.characters(removeStringFormatting(nextTextValue));
+										xhtml.characters(cleanupDwgString(nextTextValue));
 										xhtml.newline();
 									} catch (SAXException e) {
-										// TODO Auto-generated catch block
-										e.printStackTrace();
+										LOG.error("Could not write next text value {} to xhtml stream", nextTextValue);
 									}
                                 });
                             }
-                        } else if ("SummaryInfo".equals(nextFieldName)) {
-
-                        } else if ("FILEHEADER".equals(nextFieldName)) {
-                            parseHeader(jParser);
+                        }  else if ("FILEHEADER".equals(nextFieldName)) {
+                            parseHeader(jParser,metadata);
                         } else {
                             jParser.skipChildren();
                         }
@@ -160,7 +158,7 @@ public class DWGReadParser extends AbstractDWGParser {
             }
         }
     }
-    private void parseHeader(JsonParser jsonParser) throws IOException {
+    private void parseHeader(JsonParser jsonParser, Metadata metadata) throws IOException {
         JsonToken nextToken;
         while ((nextToken = jsonParser.nextToken()) != JsonToken.END_OBJECT) {
             if (nextToken == JsonToken.FIELD_NAME) {
@@ -169,32 +167,42 @@ public class DWGReadParser extends AbstractDWGParser {
                 if (nextToken.isStructStart()) {
                     jsonParser.skipChildren();
                 } else if (nextToken.isScalarValue()) {
-                   
+                    metadata.set(nextFieldName, jsonParser.getText());
                 }
             }
         }
     }
-    private String removeStringFormatting(String dwgString) {
-        String cleanString;
-        //remove \\p and replace with new line
-        cleanString = dwgString.replaceAll("\\\\P", "\n");
-        //replace lines with \L/l
-        cleanString = cleanString.replaceAll("\\\\H[0-9]*\\.[0-9]*x;\\\\[lL]", "");
-        //replace lines without \L.l
-        cleanString = cleanString.replaceAll("\\\\H[0-9]*\\.[0-9]*x;", "");
-        //replace Starting formating
-        cleanString = cleanString.replaceAll("\\{\\\\L", "");
-        //replace }
-        cleanString = cleanString.replaceAll("\\}", "");
-        //replace pi
-        cleanString = cleanString.replaceAll("\\\\pi-[0-9].*;", "");
-        //replace \A1;
-        cleanString = cleanString.replaceAll("\\\\A1;", "");
-        
-        
-        //
-        return cleanString;
-        
-    }
+	private String cleanupDwgString(String dwgString) {
+		//Cleaning chars have been found from the following websites:
+		//https://www.cadforum.cz/en/text-formatting-codes-in-mtext-objects-tip8640
+		//https://adndevblog.typepad.com/autocad/2017/09/dissecting-mtext-format-codes.html
+		String cleanString;
+		//replace Alignment characters
+		cleanString = dwgString.replaceAll("(?<!\\\\\\\\)\\\\A[0-2];", "");
+		//remove \\p and replace with new line
+		cleanString = cleanString.replaceAll("(?<!\\\\\\\\)\\\\P", "\n");
+		//replace pi
+		cleanString = cleanString.replaceAll("(?<!\\\\)\\\\pi.*;", "");
+		//replace pxi
+		cleanString = cleanString.replaceAll("(?<!\\\\)\\\\pxi.*;", "");
+		//replace pxt
+		cleanString = cleanString.replaceAll("(?<!\\\\)\\\\pxt.*;", "");
+		//replace lines with \H text height
+		cleanString = cleanString.replaceAll("(?<!\\\\)\\\\H[0-9]*.*;", "");
+		//replace lines with \F Font Selection
+		cleanString = cleanString.replaceAll("(?<!\\\\)\\\\F.*;", "");
+		//replace lines without \L.l
+		//cleanString = cleanString.replaceAll("\\\\H[0-9]*\\.[0-9]*x;", "");
+		//replace Starting formating
+		//cleanString = cleanString.replaceAll("\\{\\\\L", "");
+		//replace }
+		//cleanString = cleanString.replaceAll("\\}", "");
+
+		
+		
+		//
+		return cleanString;
+		
+	}
 
 }

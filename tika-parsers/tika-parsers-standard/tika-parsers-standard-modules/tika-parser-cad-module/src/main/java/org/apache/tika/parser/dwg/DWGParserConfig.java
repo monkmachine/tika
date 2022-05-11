@@ -9,6 +9,7 @@ public class DWGParserConfig implements Serializable{
 	private String dwgReadExecutable = "";
 	private boolean cleanDwgReadOutput = true;
     private int cleanDwgReadOutputBatchSize = 10000000;
+    // we need to remove non UTF chars and Nan's (dwread outputs these as nan)
     private String cleanDwgReadRegexToReplace = "[^\\x20-\\x7e]| nan,| nan ";
     private String cleanDwgReadReplaceWith = "";
     
